@@ -1,0 +1,233 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description></description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>GERRIT_CHANGE_NUMBER</name>
+          <description></description>
+          <defaultValue>periodical</defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>GERRIT_PATCHSET_NUMBER</name>
+          <description></description>
+          <defaultValue>build</defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>LOG_PATH</name>
+          <description></description>
+          <defaultValue>$GERRIT_CHANGE_NUMBER/$GERRIT_PATCHSET_NUMBER/$JOB_NAME/$BUILD_NUMBER</defaultValue>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+    <com.synopsys.arc.jenkinsci.plugins.jobrestrictions.jobs.JobRestrictionProperty plugin="job-restrictions@0.4"/>
+  </properties>
+  <scm class="hudson.scm.NullSCM"/>
+  <assignedNode>devstack</assignedNode>
+  <canRoam>false</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers>
+    <com.sonyericsson.hudson.plugins.gerrit.trigger.hudsontrigger.GerritTrigger plugin="gerrit-trigger@2.14.0">
+      <spec></spec>
+      <gerritProjects>
+        <com.sonyericsson.hudson.plugins.gerrit.trigger.hudsontrigger.data.GerritProject>
+          <compareType>PLAIN</compareType>
+          <pattern>neutron</pattern>
+          <branches>
+            <com.sonyericsson.hudson.plugins.gerrit.trigger.hudsontrigger.data.Branch>
+              <compareType>PLAIN</compareType>
+              <pattern>stable/juno</pattern>
+            </com.sonyericsson.hudson.plugins.gerrit.trigger.hudsontrigger.data.Branch>
+          </branches>
+        </com.sonyericsson.hudson.plugins.gerrit.trigger.hudsontrigger.data.GerritProject>
+      </gerritProjects>
+      <skipVote>
+        <onSuccessful>false</onSuccessful>
+        <onFailed>false</onFailed>
+        <onUnstable>false</onUnstable>
+        <onNotBuilt>false</onNotBuilt>
+      </skipVote>
+      <silentMode>false</silentMode>
+      <notificationLevel></notificationLevel>
+      <silentStartMode>false</silentStartMode>
+      <escapeQuotes>true</escapeQuotes>
+      <noNameAndEmailParameters>false</noNameAndEmailParameters>
+      <dependencyJobsNames></dependencyJobsNames>
+      <readableMessage>false</readableMessage>
+      <buildStartMessage></buildStartMessage>
+      <buildFailureMessage></buildFailureMessage>
+      <buildSuccessfulMessage></buildSuccessfulMessage>
+      <buildUnstableMessage></buildUnstableMessage>
+      <buildNotBuiltMessage></buildNotBuiltMessage>
+      <buildUnsuccessfulFilepath></buildUnsuccessfulFilepath>
+      <customUrl></customUrl>
+      <serverName>10.160.5.251</serverName>
+      <triggerOnEvents>
+        <com.sonyericsson.hudson.plugins.gerrit.trigger.hudsontrigger.events.PluginPatchsetCreatedEvent>
+          <excludeDrafts>true</excludeDrafts>
+          <excludeTrivialRebase>false</excludeTrivialRebase>
+          <excludeNoCodeChange>false</excludeNoCodeChange>
+        </com.sonyericsson.hudson.plugins.gerrit.trigger.hudsontrigger.events.PluginPatchsetCreatedEvent>
+        <com.sonyericsson.hudson.plugins.gerrit.trigger.hudsontrigger.events.PluginCommentAddedContainsEvent>
+          <commentAddedCommentContains>recheck</commentAddedCommentContains>
+        </com.sonyericsson.hudson.plugins.gerrit.trigger.hudsontrigger.events.PluginCommentAddedContainsEvent>
+      </triggerOnEvents>
+      <dynamicTriggerConfiguration>false</dynamicTriggerConfiguration>
+      <triggerConfigURL></triggerConfigURL>
+      <triggerInformationAction/>
+    </com.sonyericsson.hudson.plugins.gerrit.trigger.hudsontrigger.GerritTrigger>
+  </triggers>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command>#!/bin/bash -xe
+# This is the job which checks out devstack-gate
+if [[ ! -d devstack-gate ]]; then
+    echo &quot;Cloning devstack-gate&quot;
+    git clone https://github.com/jerryz1982/devstack-gate
+else
+    echo &quot;Fixing devstack-gate git remotes&quot;
+    cd devstack-gate
+    git remote set-url origin https://github.com/jerryz1982/devstack-gate
+    git remote update
+    git reset --hard
+    if ! git clean -x -f ; then
+        sleep 1
+        git clean -x -f
+    fi
+    git checkout master
+    git reset --hard remotes/origin/master
+    if ! git clean -x -f ; then
+        sleep 1
+        git clean -x -f
+    fi
+    cd ..
+fi
+
+# Switch to forked devstack juno
+if [[ ! -d /opt/git/openstack-dev/devstack ]]; then
+    echo &quot;Cloning devstack-gate&quot;
+    sudo git clone https://github.com/jerryz1982/devstack
+else
+    echo &quot;Fixing devstack git remotes&quot;
+    cd /opt/git/openstack-dev/devstack
+    sudo git remote set-url origin https://github.com/jerryz1982/devstack
+    sudo git remote update
+    sudo git reset --hard
+    if ! sudo git clean -x -f ; then
+        sleep 1
+        sudo git clean -x -f
+    fi
+    sudo git checkout stable/juno_multinode
+    sudo git reset --hard remotes/origin/stable/juno_multinode
+    if ! sudo git clean -x -f ; then
+        sleep 1
+        sudo git clean -x -f
+    fi
+    cd $WORKSPACE
+fi
+sudo rm -rf $WORKSPACE/logs /opt/stack/logs</command>
+    </hudson.tasks.Shell>
+    <hudson.tasks.Shell>
+      <command>#!/bin/bash -ex
+# Clean FortiGate configuration
+ssh -o StrictHostKeyChecking=no -tt admin@10.160.38.95 &lt;&lt; &apos;EOF&apos;
+config global
+execute restore config ftp jerryzhao/full_config_95 ftp.fortinet.com myfortinet a11a11
+y
+EOF
+#ping -c 6 -i 30 10.160.38.95 || exit $?
+
+if [ &quot;$GERRIT_PROJECT&quot; == &quot;neutron&quot; ]; then
+    export ZUUL_PROJECT=$GERRIT_PROJECT
+    export ZUUL_URL=http://$GERRIT_HOST:8080
+    export ZUUL_BRANCH=$GERRIT_BRANCH
+    export ZUUL_REF=$GERRIT_REFSPEC
+    export NEUTRON_BRANCH=$GERRIT_REFSPEC
+else
+    export OVERRIDE_ZUUL_BRANCH=stable/juno
+    export NEUTRON_BRANCH=stable/juno
+fi
+
+
+# Setup environment variables for FortiGate driver test
+export OVERRIDE_DEVSTACK_PROJECT_BRANCH=stable/juno_multinode
+export OVERRIDE_REQUIREMENTS_PROJECT_BRANCH=test_fortinet
+export DEVSTACK_GATE_NEUTRON=1
+DEVSTACK_LOCAL_CONFIG=&quot;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_USE_DEBUG_COMMAND=False;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;RECLONE=True;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_PLUGIN=fortinet;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_FORTINET_PLUGIN_FG_IP=10.160.38.95;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_FORTINET_PLUGIN_FG_INT_INF=port24;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_FORTINET_PLUGIN_FG_EXT_INF=port32;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_FORTINET_PLUGIN_FG_TENANT_NET_TYPE=vlan;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;NEUTRON_REPO=http://10.160.5.251:8080/neutron.git;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;NEUTRON_BRANCH=$NEUTRON_BRANCH;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;REQUIREMENTS_REPO=http://github.com/jerryz1982/requirements.git;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;REQUIREMENTS_BRANCH=test_fortinet;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;ML2_L3_PLUGIN=router_fortinet;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_ML2_PLUGIN_MECHANISM_DRIVERS=&apos;openvswitch,fortinet&apos;;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_ML2_PLUGIN_VLAN_TYPE_OPTIONS=&apos;network_vlan_ranges=physnet1:1000:1099&apos;;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_ML2_PLUGIN_TYPE_DRIVERS=local,flat,vlan,gre,vxlan;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_ML2_TENANT_NETWORK_TYPE=vlan;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;PROVIDER_NETWORK_TYPE=vlan;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_USE_PROVIDER_NETWORKING=True;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_L3_ENABLED=True;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;ENABLE_TENANT_VLANS=True;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;TENANT_VLAN_RANGE=1000:1099;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;PHYSICAL_NETWORK=physnet1;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;OVS_PHYSICAL_BRIDGE=br-eth1;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;PUBLIC_INTERFACE=eth1;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_FLOATING_ALLOCATION_POOL=start=10.160.38.201,end=10.160.38.250;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;FLOATING_RANGE=10.160.38.1/24;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;PUBLIC_NETWORK_GATEWAY=10.160.38.1;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_USE_DEBUG_COMMAND=False;&quot;
+export DEVSTACK_LOCAL_CONFIG+=&quot;HOST_IP_IFACE=eth0&quot;
+export OVERRIDE_ENABLED_SERVICES=q-svc,q-agt,key,g-api,g-reg,n-api,n-crt,n-obj,n-cpu,n-cond,n-sch,n-xvnc,n-cauth,rabbit,tempest,mysql
+export DEVSTACK_GATE_TEMPEST=1
+export DEVSTACK_GATE_TIMEOUT=120
+export DEVSTACK_GATE_TEMPEST_REGEX=&quot;tempest.api.network.test_networks_negative \
+tempest.api.network.test_networks.NetworksTestJSON \
+&quot;
+
+echo &quot;Copying devstack-vm-gate-wrap.sh&quot;
+cp devstack-gate/devstack-vm-gate-wrap.sh ./safe-devstack-vm-gate-wrap.sh
+echo &quot;Running safe-devstack-vm-gate-wrap.sh&quot;
+./safe-devstack-vm-gate-wrap.sh
+# Save the return value so we can exit with this
+DGRET=$?
+
+</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers>
+    <be.certipost.hudson.plugin.SCPRepositoryPublisher plugin="scp@1.9-SNAPSHOT">
+      <siteName>log server</siteName>
+      <entries>
+        <be.certipost.hudson.plugin.Entry>
+          <filePath>logs/$LOG_PATH</filePath>
+          <sourceFile>logs/**</sourceFile>
+          <keepHierarchy>true</keepHierarchy>
+          <copyConsoleLog>false</copyConsoleLog>
+          <copyAfterFailure>true</copyAfterFailure>
+        </be.certipost.hudson.plugin.Entry>
+        <be.certipost.hudson.plugin.Entry>
+          <filePath>logs/$LOG_PATH</filePath>
+          <sourceFile></sourceFile>
+          <keepHierarchy>false</keepHierarchy>
+          <copyConsoleLog>true</copyConsoleLog>
+          <copyAfterFailure>true</copyAfterFailure>
+        </be.certipost.hudson.plugin.Entry>
+      </entries>
+    </be.certipost.hudson.plugin.SCPRepositoryPublisher>
+  </publishers>
+  <buildWrappers>
+    <hudson.plugins.timestamper.TimestamperBuildWrapper plugin="timestamper@1.7.2"/>
+  </buildWrappers>
+</project>

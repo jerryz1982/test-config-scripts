@@ -1,0 +1,139 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description></description>
+  <logRotator class="hudson.tasks.LogRotator">
+    <daysToKeep>15</daysToKeep>
+    <numToKeep>30</numToKeep>
+    <artifactDaysToKeep>-1</artifactDaysToKeep>
+    <artifactNumToKeep>-1</artifactNumToKeep>
+  </logRotator>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>GERRIT_CHANGE_NUMBER</name>
+          <description></description>
+          <defaultValue>periodical</defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>GERRIT_PATCHSET_NUMBER</name>
+          <description></description>
+          <defaultValue>$BUILD_ID</defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>LOG_PATH</name>
+          <description></description>
+          <defaultValue>$GERRIT_CHANGE_NUMBER/$GERRIT_PATCHSET_NUMBER/$JOB_NAME/$BUILD_NUMBER</defaultValue>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+    <com.synopsys.arc.jenkinsci.plugins.jobrestrictions.jobs.JobRestrictionProperty plugin="job-restrictions@0.4"/>
+  </properties>
+  <scm class="hudson.scm.NullSCM"/>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers>
+    <hudson.triggers.TimerTrigger>
+      <spec>H H(0-7) * * *</spec>
+    </hudson.triggers.TimerTrigger>
+  </triggers>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command>rm -rf $WORKSPACE/logs</command>
+    </hudson.tasks.Shell>
+    <hudson.tasks.Shell>
+      <command>#!/bin/bash -x
+ssh stack@10.160.2.220 &apos;source /etc/profile; /home/stack/devstack/unstack.sh; rm -rf /opt/stack/logs&apos; || true
+ssh stack@10.160.2.112 &apos;/home/stack/devstack/unstack.sh; rm -rf /opt/stack/logs&apos; || true
+ssh -o StrictHostKeyChecking=no -tt admin@10.160.38.95 &lt;&lt; &apos;EOF&apos;
+config global
+execute restore config ftp jerryzhao/full_config_95 ftp.fortinet.com myfortinet a11a11
+y
+EOF
+ping -c 6 -i 30 10.160.38.95 || exit $?
+
+if [ &quot;$GERRIT_PROJECT&quot; == &quot;neutron&quot; ]; then
+    ssh stack@10.160.2.220 \
+    &quot;source /home/stack/devstack/functions-common; \
+    git_clone http://10.160.5.251:8080/neutron /opt/stack/neutron $GERRIT_REFSPEC; \
+    cp /home/stack/devstack/local.conf.noreclone /home/stack/devstack/local.conf; \
+    /home/stack/devstack/stack.sh&quot;
+    ssh stack@10.160.2.112 \
+    &quot;source /home/stack/devstack/functions-common; \
+    git_clone http://10.160.5.251:8080/neutron /opt/stack/neutron $GERRIT_REFSPEC; \
+    cp /home/stack/devstack/local.conf.noreclone /home/stack/devstack/local.conf; \
+    /home/stack/devstack/stack.sh&quot;
+else
+    ssh stack@10.160.2.220 \
+    &quot;cp /home/stack/devstack/local.conf.reclone /home/stack/devstack/local.conf; \
+    /home/stack/devstack/stack.sh&quot;
+    ssh stack@10.160.2.112 \
+    &quot;cp /home/stack/devstack/local.conf.reclone /home/stack/devstack/local.conf; \
+    /home/stack/devstack/stack.sh&quot;
+fi
+STACKRET=$?
+
+export DEVSTACK_GATE_TEMPEST_REGEX=&quot;tempest.api.network.test_networks_negative \
+tempest.api.network.test_networks.NetworksTestJSON \
+&quot;
+#tempest.scenario.test_network_basic_ops.TestNetworkBasicOps.test_network_basic_ops&quot;
+ssh stack@10.160.2.220 \
+&quot;cd /opt/stack/tempest/; tox -eall -- --concurrency=3 $DEVSTACK_GATE_TEMPEST_REGEX&quot;
+TEMPESTRET=$?
+
+
+# Prepare logs for archving.
+if [ ! -d $WORKSPACE/logs ]; then
+    mkdir $WORKSPACE/logs
+fi
+rm -rf $WORKSPACE/logs/*
+scp -r stack@10.160.2.220:/opt/stack/logs $WORKSPACE/logs/controller
+scp -r stack@10.160.2.112:/opt/stack/logs $WORKSPACE/logs/compute
+mkdir -p $WORKSPACE/logs/controller $WORKSPACE/logs/compute
+#find $WORKSPACE/logs/controller_old -type l -print0 | \
+#            xargs -0 -I {} sudo cp {} $WORKSPACE/logs/controller
+#find $WORKSPACE/logs/compute_old -type l -print0 | \
+#            xargs -0 -I {} sudo cp {} $WORKSPACE/logs/compute
+#rm -rf $WORKSPACE/logs/*_old
+for f in $(find $WORKSPACE/logs -regextype posix-egrep -regex &apos;.*[^0-9]\.log&apos;); do
+        sudo mv $f ${f/.log/.txt}
+done
+rm -f $WORKSPACE/logs/*/*.log
+for f in $(find $WORKSPACE/logs -name &quot;*.failure&quot;); do
+        sudo mv $f ${f/.failure/.txt}
+done
+sudo find $WORKSPACE/logs -iname &apos;*.txt&apos; -execdir gzip -9 {} \+
+
+if [[ $((STACKRET+TEMPESTRET)) != 0 ]]; then
+    exit 1
+fi</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers>
+    <be.certipost.hudson.plugin.SCPRepositoryPublisher plugin="scp@1.9-SNAPSHOT">
+      <siteName>log server</siteName>
+      <entries>
+        <be.certipost.hudson.plugin.Entry>
+          <filePath>logs/$LOG_PATH</filePath>
+          <sourceFile>logs/**</sourceFile>
+          <keepHierarchy>true</keepHierarchy>
+          <copyConsoleLog>false</copyConsoleLog>
+          <copyAfterFailure>true</copyAfterFailure>
+        </be.certipost.hudson.plugin.Entry>
+        <be.certipost.hudson.plugin.Entry>
+          <filePath>logs/$LOG_PATH</filePath>
+          <sourceFile></sourceFile>
+          <keepHierarchy>false</keepHierarchy>
+          <copyConsoleLog>true</copyConsoleLog>
+          <copyAfterFailure>true</copyAfterFailure>
+        </be.certipost.hudson.plugin.Entry>
+      </entries>
+    </be.certipost.hudson.plugin.SCPRepositoryPublisher>
+  </publishers>
+  <buildWrappers/>
+</project>
