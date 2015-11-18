@@ -43,6 +43,10 @@
               <compareType>PLAIN</compareType>
               <pattern>stable/juno</pattern>
             </com.sonyericsson.hudson.plugins.gerrit.trigger.hudsontrigger.data.Branch>
+            <com.sonyericsson.hudson.plugins.gerrit.trigger.hudsontrigger.data.Branch>
+              <compareType>PLAIN</compareType>
+              <pattern>fgt_refactor_juno</pattern>
+            </com.sonyericsson.hudson.plugins.gerrit.trigger.hudsontrigger.data.Branch>
           </branches>
         </com.sonyericsson.hudson.plugins.gerrit.trigger.hudsontrigger.data.GerritProject>
       </gerritProjects>
@@ -65,7 +69,7 @@
       <buildUnstableMessage></buildUnstableMessage>
       <buildNotBuiltMessage></buildNotBuiltMessage>
       <buildUnsuccessfulFilepath></buildUnsuccessfulFilepath>
-      <customUrl></customUrl>
+      <customUrl>http://10.160.5.251:8081/$LOG_PATH</customUrl>
       <serverName>10.160.5.251</serverName>
       <triggerOnEvents>
         <com.sonyericsson.hudson.plugins.gerrit.trigger.hudsontrigger.events.PluginPatchsetCreatedEvent>
@@ -141,7 +145,7 @@ config global
 execute restore config ftp jerryzhao/full_config_95 ftp.fortinet.com myfortinet a11a11
 y
 EOF
-#ping -c 6 -i 30 10.160.38.95 || exit $?
+# ping -c 6 -i 30 10.160.38.95 || exit $?
 
 if [ &quot;$GERRIT_PROJECT&quot; == &quot;neutron&quot; ]; then
     export ZUUL_PROJECT=$GERRIT_PROJECT
@@ -167,34 +171,47 @@ DEVSTACK_LOCAL_CONFIG+=&quot;Q_FORTINET_PLUGIN_FG_IP=10.160.38.95;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;Q_FORTINET_PLUGIN_FG_INT_INF=port24;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;Q_FORTINET_PLUGIN_FG_EXT_INF=port32;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;Q_FORTINET_PLUGIN_FG_TENANT_NET_TYPE=vlan;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_FORTINET_TENANT_INTERFACE=eth1;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;NEUTRON_REPO=http://10.160.5.251:8080/neutron.git;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;NEUTRON_BRANCH=$NEUTRON_BRANCH;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;REQUIREMENTS_REPO=http://github.com/jerryz1982/requirements.git;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;REQUIREMENTS_BRANCH=test_fortinet;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;TEMPEST_REPO=http://github.com/jerryz1982/tempest.git;&quot;
+# TODO: change tempest temporarily to add dhcp rule and ping timeout to workaround fgt plugin bugs.
+DEVSTACK_LOCAL_CONFIG+=&quot;TEMPEST_BRANCH=add_dhcp_secgrouprule;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;ML2_L3_PLUGIN=router_fortinet;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;Q_ML2_PLUGIN_MECHANISM_DRIVERS=&apos;openvswitch,fortinet&apos;;&quot;
-DEVSTACK_LOCAL_CONFIG+=&quot;Q_ML2_PLUGIN_VLAN_TYPE_OPTIONS=&apos;network_vlan_ranges=physnet1:1000:1099&apos;;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_ML2_PLUGIN_VLAN_TYPE_OPTIONS=&apos;network_vlan_ranges=physnet1:1009:1099&apos;;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;Q_ML2_PLUGIN_TYPE_DRIVERS=local,flat,vlan,gre,vxlan;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;Q_ML2_TENANT_NETWORK_TYPE=vlan;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;PROVIDER_NETWORK_TYPE=vlan;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;Q_USE_PROVIDER_NETWORKING=True;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;Q_L3_ENABLED=True;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_L3_ROUTER_PER_TENANT=True;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;ENABLE_TENANT_VLANS=True;&quot;
-DEVSTACK_LOCAL_CONFIG+=&quot;TENANT_VLAN_RANGE=1000:1099;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;TENANT_VLAN_RANGE=1009:1099;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;PHYSICAL_NETWORK=physnet1;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;OVS_PHYSICAL_BRIDGE=br-eth1;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;PUBLIC_INTERFACE=eth1;&quot;
-DEVSTACK_LOCAL_CONFIG+=&quot;Q_FLOATING_ALLOCATION_POOL=start=10.160.38.201,end=10.160.38.250;&quot;
+DEVSTACK_LOCAL_CONFIG+=&quot;Q_FLOATING_ALLOCATION_POOL=start=10.160.38.201,end=10.160.38.219;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;FLOATING_RANGE=10.160.38.1/24;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;PUBLIC_NETWORK_GATEWAY=10.160.38.1;&quot;
 DEVSTACK_LOCAL_CONFIG+=&quot;Q_USE_DEBUG_COMMAND=False;&quot;
+# TODO: disable FTM to bypass dhcp offer issue
+#DEVSTACK_LOCAL_CONFIG+=&quot;Q_USE_SECGROUP=False;&quot;
 export DEVSTACK_LOCAL_CONFIG+=&quot;HOST_IP_IFACE=eth0&quot;
-export OVERRIDE_ENABLED_SERVICES=q-svc,q-agt,key,g-api,g-reg,n-api,n-crt,n-obj,n-cpu,n-cond,n-sch,n-xvnc,n-cauth,rabbit,tempest,mysql
+export OVERRIDE_ENABLED_SERVICES=horizon,q-svc,q-agt,key,g-api,g-reg,n-api,n-crt,n-obj,n-cpu,n-cond,n-sch,n-xvnc,n-cauth,rabbit,tempest,mysql
 export DEVSTACK_GATE_TEMPEST=1
 export DEVSTACK_GATE_TIMEOUT=120
+export TEMPEST_CONCURRENCY=1
 export DEVSTACK_GATE_TEMPEST_REGEX=&quot;tempest.api.network.test_networks_negative \
-tempest.api.network.test_networks.NetworksTestJSON \
-&quot;
+tempest.api.network.test_networks.NetworksTest \
+tempest.scenario.test_network_basic_ops.TestNetworkBasicOps.test_network_basic_ops \
+tempest.scenario.test_network_basic_ops.TestNetworkBasicOps.test_connectivity_between_vms_on_different_networks \
+tempest.scenario.test_network_basic_ops.TestNetworkBasicOps.test_hotplug_nic \
+tempest.scenario.test_network_basic_ops.TestNetworkBasicOps.test_update_instance_port_admin_state \
+tempest.scenario.test_network_advanced_server_ops.TestNetworkAdvancedServerOps&quot;
+
 
 echo &quot;Copying devstack-vm-gate-wrap.sh&quot;
 cp devstack-gate/devstack-vm-gate-wrap.sh ./safe-devstack-vm-gate-wrap.sh
