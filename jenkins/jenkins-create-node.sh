@@ -7,7 +7,7 @@ EXECUTORS=1
 HOST=$3
 SSH_PORT=22
 CRED_ID=$4
-LABELS=devstack
+LABELS=$5
 USERID=anonymous
 
 cat <<EOF | java -jar /home/jenkins/scripts/jenkins-cli.jar -s $1 create-node $2

@@ -23,16 +23,8 @@
   <builders>
     <hudson.tasks.Shell>
       <command>#!/bin/bash -x
-/bin/bash /home/jenkins/scripts/jenkins-delete-node.sh \
-http://localhost:8080 $SLAVE_NODE_NAME
-python /home/jenkins/scripts/vmware_provision.py \
---name_key $SLAVE_NODE_NAME --vm_names $SLAVE_NODE_NAME --action_name revert
-NODE_LABEL=&quot;devstack-vm&quot;
-/bin/bash /home/jenkins/scripts/jenkins-create-node.sh \
-http://localhost:8080 $SLAVE_NODE_NAME $SLAVE_NODE_NAME ccd937ce-4611-48e7-821f-d65c372375d7 &quot;${NODE_LABEL}&quot;
-/bin/bash /home/jenkins/scripts/jenkins-online-node.sh \
-http://localhost:8080 $SLAVE_NODE_NAME
-echo &quot;restored&quot;</command>
+/bin/bash /home/jenkins/scripts/jenkins-offline-node.sh \
+http://localhost:8080 $SLAVE_NODE_NAME</command>
     </hudson.tasks.Shell>
   </builders>
   <publishers/>
